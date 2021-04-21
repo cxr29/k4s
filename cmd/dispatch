@@ -27,5 +27,5 @@ for i in "$@"; do
 
   scp -P "$ssh_port" "$files_dir/k4s-$i.tgz" "$ssh_user@$i":/tmp
   ssh -p "$ssh_port" "$ssh_user@$i" \
-    "rm -rf /tmp/k4s-$i && mkdir -p /tmp/k4s-$i && cd /tmp/k4s-$i && tar -xzvf /tmp/k4s-$i.tgz && $cmd cmd/install-node $i"
+    "rm -rf /tmp/k4s-$i && mkdir -p /tmp/k4s-$i && cd /tmp/k4s-$i && tar -xzf /tmp/k4s-$i.tgz && $cmd cmd/install-node $i"
 done

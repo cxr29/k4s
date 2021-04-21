@@ -6,7 +6,6 @@
 control_plane_nodes=(# ip addresses
 )
 
-# TODO one key install
 worker_nodes=(# ip address
 )
 
