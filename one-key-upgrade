@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2021 CHEN Xianren. All rights reserved.
+# Use of this source code is governed by a MIT
+# license that can be found in the LICENSE file.
+
+set -o errexit -o pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+cd cmd
+. check-conf
+
+bash prepare
+bash gen-file
+
+if [[ -f /usr/local/bin/etcdctl ]]; then
+  mkdir -p "$backup_dir"
+  f="$backup_dir/etcd-$(date '+%Y%m%d%H%M%S')"
+  echo "backup etcd: $f"
+  ETCDCTL_API=3 /usr/local/bin/etcdctl --endpoints="https://${control_plane_nodes[0]}:$etcd_port" \
+    --cacert="$ssl_dir/etcd-ca.pem" --cert="$ssl_dir/etcd-client.pem" --key="$ssl_dir/etcd-client-key.pem" \
+    snapshot save "$f"
+  unset f
+fi
+
+bash gen-node "${control_plane_nodes[@]}"
+bash dispatch backup-upgrade "${control_plane_nodes[@]}"
+bash wait-node "${control_plane_nodes[@]}"
+
+v="$(kubectl --kubeconfig="$files_dir/admin.conf" version --short)"
+echo "$v"
+if ! echo "$v" | grep -Fi client | sed 's/$/-/' | grep -Fqi " $kubernetes_version-"; then
+  exit 1
+fi
+if ! echo "$v" | grep -Fi server | sed 's/$/-/' | grep -Fqi " $kubernetes_version-"; then
+  exit 1
+fi
+
+if [[ "${#worker_nodes[@]}" -gt 0 ]]; then
+  for s in "${worker_nodes[@]}"; do
+    bash gen-node "$s"
+    bash dispatch backup-upgrade "$s"
+    bash wait-node "$s"
+  done
+fi

@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2021 CHEN Xianren. All rights reserved.
+# Use of this source code is governed by a MIT
+# license that can be found in the LICENSE file.
+
+set -o errexit -o pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+if [[ $# -ne 1 ]]; then
+  echo 'Usage: upgrade-node <ip>'
+  exit 1
+fi
+
+if [[ "$(id -u)" -ne 0 ]]; then
+  echo 'Please run as root'
+  exit
+fi
+
+. check-conf
+
+node_ip="$(ip -o route get to "${control_plane_nodes[0]}" | sed -n 's/.*src \([0-9.]\+\).*/\1/p')"
+
+if [[ "$1" != "$node_ip" ]]; then
+  echo "Error: not local ip: $1"
+  exit 1
+fi
+
+d="../nodes/$node_ip"
+if [[ ! -e "$d" ]]; then
+  echo "ERROR: $d not exist"
+  exit 1
+fi
+
+# TODO migrate
+
+bash stop "$root_dir"
+
+install -v -C -m 755 -o root ../files/kubelet /usr/local/bin
+(cd "$d" && cp -r --preserve=mode -- * /)
+
+systemctl daemon-reload
+systemctl enable kubelet
+systemctl start kubelet

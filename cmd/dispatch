@@ -7,6 +7,17 @@
 set -o errexit -o pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
+if [[ $# -eq 0 ]]; then
+  echo 'Usage: dispatch [install|reset|backup|upgrade|backup-upgrade] <ip>...'
+  exit 1
+fi
+
+cmd=''
+if [[ "$1" == install || "$1" == reset || "$1" == backup || "$1" == upgrade || "$1" == backup-upgrade ]]; then
+  cmd=$1
+  shift
+fi
+
 . check-conf
 cd ..
 
@@ -17,15 +28,17 @@ if [[ -z "$ssh_port" ]]; then
   ssh_port=22
 fi
 
-cmd=bash
+sb=bash
 if [[ "$ssh_user" != root ]]; then
-  cmd="sudo -n $cmd"
+  sb="sudo -n $sb"
 fi
 
 for i in "$@"; do
   tar -czf "$files_dir/k4s-$i.tgz" conf cmd -C "$k4s_dir" files/kubelet "nodes/$i"
 
   scp -P "$ssh_port" "$files_dir/k4s-$i.tgz" "$ssh_user@$i":/tmp
-  ssh -p "$ssh_port" "$ssh_user@$i" \
-    "rm -rf /tmp/k4s-$i && mkdir -p /tmp/k4s-$i && cd /tmp/k4s-$i && tar -xzf /tmp/k4s-$i.tgz && $cmd cmd/install-node $i"
+  if [[ -n "$cmd" ]]; then
+    ssh -t -p "$ssh_port" "$ssh_user@$i" \
+      "rm -rf /tmp/k4s-$i && mkdir -p /tmp/k4s-$i && cd /tmp/k4s-$i && tar -xzf /tmp/k4s-$i.tgz && $sb cmd/$cmd-node $i"
+  fi
 done

@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2021 CHEN Xianren. All rights reserved.
+# Use of this source code is governed by a MIT
+# license that can be found in the LICENSE file.
+
+set -o errexit -o pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+if [[ $# -ne 1 ]]; then
+  echo 'Usage: backup-node <ip>'
+  exit 1
+fi
+
+. check-conf # TODO old-conf
+
+node_ip="$(ip -o route get to "${control_plane_nodes[0]}" | sed -n 's/.*src \([0-9.]\+\).*/\1/p')"
+
+if [[ "$1" != "$node_ip" ]]; then
+  echo "Error: not local ip: $1"
+  exit 1
+fi
+
+back_dir="$backup_dir/$node_ip-$(date '+%Y%m%d%H%M%S')"
+
+echo "backup dir: $back_dir"
+echo "  root dir: $root_dir"
+if [[ " ${control_plane_nodes[@]} " =~ " $node_ip " ]]; then
+  echo "  etcd dir: $etcd_dir"
+fi
+read -r -p ' yes or no: ' yn
+echo
+if [[ "$yn" != yes ]]; then
+  exit 1
+fi
+
+bash stop "$root_dir"
+
+mkdir -p "$back_dir"
+
+if [[ -e /etc/systemd/system/kubelet.service ]]; then
+  cp -rpfv --parents /etc/systemd/system/kubelet.service "$back_dir"
+fi
+
+if [[ -e /etc/systemd/system/resolvconf.service ]]; then
+  cp -rpfv --parents /etc/systemd/system/resolvconf.service "$back_dir"
+fi
+
+if [[ -e /usr/local/bin/kubelet ]]; then
+  cp -rpfv --parents /usr/local/bin/kubelet "$back_dir"
+fi
+
+if [[ -e /etc/kubernetes ]]; then
+  cp -rpfv --parents /etc/kubernetes "$back_dir"
+fi
+
+if [[ -e "$root_dir" ]]; then
+  cp -rpfv --parents "$root_dir" "$back_dir"
+fi
+
+if [[ " ${control_plane_nodes[@]} " =~ " $node_ip " && -e "$etcd_dir" ]]; then
+  cp -rpfv --parents "$etcd_dir" "$back_dir"
+fi

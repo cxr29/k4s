@@ -16,7 +16,7 @@ alias kubectl="kubectl --kubeconfig='$files_dir/admin.conf'"
 wait_kubectl
 
 for s in "${control_plane_nodes[@]}"; do
-  wait_node "$s"
+  wait_node "$s" "$kubernetes_version"
 
   s=$(get_node_name "$s")
   kubectl label node "$s" node-role.kubernetes.io/master=true --overwrite

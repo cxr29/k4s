@@ -25,6 +25,17 @@ for k in "${!files[@]}"; do
   fi
 done
 
+# TODO root?
 install -v -C -m 755 -o root "$files_dir/kubectl" /usr/local/bin
+if [[ -v files["etcdctl"] ]]; then
+  install -v -C -m 755 -o root "$files_dir/etcdctl" /usr/local/bin
+fi
+if [[ -v files["etcd.tgz"] ]]; then
+  d="/tmp/etcd-$RANDOM"
+  mkdir -p "$d"
+  tar -xzf "$files_dir/etcd.tgz" -C "$d" --strip-components=1
+  install -v -C -m 755 -o root "$d/etcd" "$d/etcdctl" /usr/local/bin
+  rm -rf "$d"
+fi
 
 # TODO offline images

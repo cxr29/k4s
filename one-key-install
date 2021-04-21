@@ -13,9 +13,13 @@ cd cmd
 bash prepare
 bash gen-ssl
 bash gen-file
+
 bash gen-node "${control_plane_nodes[@]}"
-bash dispatch "${control_plane_nodes[@]}"
+bash dispatch install "${control_plane_nodes[@]}"
 bash wait-control-plane
-bash gen-node "${worker_nodes[@]}"
-bash dispatch "${worker_nodes[@]}"
-bash wait-node "${worker_nodes[@]}"
+
+if [[ "${#worker_nodes[@]}" -gt 0 ]]; then
+  bash gen-node "${worker_nodes[@]}"
+  bash dispatch install "${worker_nodes[@]}"
+  bash wait-node "${worker_nodes[@]}"
+fi

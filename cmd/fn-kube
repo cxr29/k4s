@@ -23,19 +23,29 @@ wait_kubectl() {
 }
 
 get_node_name() {
-  awk -v s="$1" 'BEGIN{n=""}{if(NR>1&&(s==$1||s==$6)){n=$1;exit 0}else if(NR==0&&!($1=="NAME"&&$6=="INTERNAL-IP")){print "invalid kubectl";exit 1}}END{if(n==""){printf("invalid node: %s\n",s);exit 1}else{print n}}' <<<"$(kubectl get nodes -o wide)"
+  awk -v s="$1" 'BEGIN{n=""}{if(NR>1&&(s==$1||s==$6)){n=$1;exit 0}else if(NR==0&&!($1=="NAME"&&$6=="INTERNAL-IP")){print "WARN: unsupported kubectl" > "/dev/stderr";exit 1}}END{if(n==""){exit 1}else{print n}}' <<<"$(kubectl get nodes -o wide)"
 }
 
 get_node_ip() {
-  awk -v s="$1" 'BEGIN{n=""}{if(NR>1&&(s==$1||s==$6)){n=$6;exit 0}else if(NR==0&&!($1=="NAME"&&$6=="INTERNAL-IP")){print "invalid kubectl";exit 1}}END{if(n==""){printf("invalid node: %s\n",s);exit 1}else{print n}}' <<<"$(kubectl get nodes -o wide)"
+  awk -v s="$1" 'BEGIN{n=""}{if(NR>1&&(s==$1||s==$6)){n=$6;exit 0}else if(NR==0&&!($1=="NAME"&&$6=="INTERNAL-IP")){print "WARN: unsupported kubectl" > "/dev/stderr";exit 1}}END{if(n==""){exit 1}else{print n}}' <<<"$(kubectl get nodes -o wide)"
+}
+
+get_node_version() {
+  awk -v s="$1" 'BEGIN{v=""}{if(NR>1&&(s==$1||s==$6)){v=$5;exit 0}else if(NR==0&&!($1=="NAME"&&$5=="VERSION"&&$6=="INTERNAL-IP")){print "WARN: unsupported kubectl" > "/dev/stderr";exit 1}}END{if(v==""){exit 1}else{print v}}' <<<"$(kubectl get nodes -o wide)"
 }
 
 wait_node() {
   local timeout=true
+  local v
   for _ in {1..360}; do
     if kubectl get nodes --no-headers "$(get_node_name "$1")" >/dev/null 2>/dev/null; then
-      timeout=false
-      break
+      v="$(get_node_version "$1")"
+      if [[ "${v%%-*}" == "$2" ]]; then
+        timeout=false
+        break
+      else
+        echo "WARN: node $1 version: $v"
+      fi
     fi
     echo "wait node $1 sleep 10s"
     sleep 10

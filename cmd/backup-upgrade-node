@@ -7,16 +7,10 @@
 set -o errexit -o pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
-. check-conf
+if [[ $# -ne 1 ]]; then
+  echo 'Usage: backup-upgrade-node <ip>'
+  exit 1
+fi
 
-shopt -s expand_aliases
-alias kubectl="kubectl --kubeconfig='$files_dir/admin.conf'"
-. fn-kube
-
-wait_kubectl
-
-for i in "$@"; do
-  wait_node "$i" "$kubernetes_version"
-  wait_node_net "$i"
-  wait_node_ready "$i"
-done
+bash backup-node "$1"
+bash upgrade-node "$1"

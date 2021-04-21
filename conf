@@ -27,6 +27,7 @@ cluster_name=kubernetes
 # TODO latest patch version
 kubernetes_version=v1.18.18
 calico_version=v3.18.1
+etcd_version=v3.4.15
 
 root_dir=/var/lib/kubelet
 
@@ -44,11 +45,12 @@ declare -A files=(
   [mo]=https://raw.githubusercontent.com/tests-always-included/mo/master/mo
   [kubectl]="https://dl.k8s.io/release/$kubernetes_version/bin/linux/amd64/kubectl"
   [kubelet]="https://dl.k8s.io/release/$kubernetes_version/bin/linux/amd64/kubelet"
+  #[etcd.tgz]="https://storage.googleapis.com/etcd/$etcd_version/etcd-$etcd_version-linux-amd64.tar.gz"
 )
 
 # TODO offline
 declare -A images=(
-  [etcd]=quay.io/coreos/etcd:v3.4.15
+  [etcd]="quay.io/coreos/etcd:$etcd_version"
   [pause]=k8s.gcr.io/pause:3.2
   [coredns]=coredns/coredns:1.6.9
   [apiserver]="k8s.gcr.io/kube-apiserver:$kubernetes_version"
@@ -62,10 +64,14 @@ declare -A images=(
   [calico_typha]="docker.io/calico/typha:$calico_version"
   [ingress_nginx_controller]=k8s.gcr.io/ingress-nginx/controller:v0.45.0
   [ingress_webhook_certgen]=docker.io/jettech/kube-webhook-certgen:v1.5.1
-  [nginx]=nginx:1.18.0
+  #[nginx]=nginx:1.18.0
 )
 image_pull_policy=IfNotPresent
-nginx_example_domain=''
+#nginx_example_domain=example.com
 
 k4s_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ssl_dir="$k4s_dir/ssl"
+
+#backup_dir=
+#ssh_user=
+#ssh_port=

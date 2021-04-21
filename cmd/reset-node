@@ -8,7 +8,7 @@ set -o errexit -o pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
 if [[ $# -ne 1 ]]; then
-  echo 'Usage: reset <ip>'
+  echo 'Usage: reset-node <ip>'
   exit 1
 fi
 

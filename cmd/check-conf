@@ -20,6 +20,10 @@ log_file="$k4s_dir/log"
 files_dir="$k4s_dir/files"
 nodes_dir="$k4s_dir/nodes"
 
+if [[ -z "$backup_dir" ]]; then
+  backup_dir=/var/lib/k4s/backup
+fi
+
 . fn
 
 control_plane_count="${#control_plane_nodes[@]}"
