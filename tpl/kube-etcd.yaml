@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    component: kube-etcd
+    tier: control-plane
+  name: kube-etcd
+  namespace: kube-system
+spec:
+  containers:
+    - command:
+        - etcd
+        - --advertise-client-urls=https://{{control_plane_ip}}:{{etcd_port}}
+        - --auto-compaction-retention=1
+        - --cert-file=/etc/kubernetes/ssl/etcd-server.pem
+        - --client-cert-auth=true
+        - --data-dir=/var/lib/etcd
+        - --initial-advertise-peer-urls=https://{{control_plane_ip}}:{{etcd_peer_port}}
+        - --initial-cluster={{#control_plane_nodes}}{{comma_if_not_first}}{{.}}=https://{{.}}:{{etcd_peer_port}}{{/control_plane_nodes}}
+        - --key-file=/etc/kubernetes/ssl/etcd-server-key.pem
+        - --listen-client-urls=https://127.0.0.1:{{etcd_port}},https://{{control_plane_ip}}:{{etcd_port}}
+        - --listen-metrics-urls=http://127.0.0.1:{{etcd_metrics_port}}
+        - --listen-peer-urls=https://{{control_plane_ip}}:{{etcd_peer_port}}
+        - --name={{control_plane_ip}}
+        - --peer-cert-file=/etc/kubernetes/ssl/etcd-peer.pem
+        - --peer-client-cert-auth=true
+        - --peer-key-file=/etc/kubernetes/ssl/etcd-peer-key.pem
+        - --peer-trusted-ca-file=/etc/kubernetes/ssl/etcd-ca.pem
+        - --quota-backend-bytes=8589934592
+        - --snapshot-count=10000
+        - --trusted-ca-file=/etc/kubernetes/ssl/etcd-ca.pem
+      image: {{images.etcd}}
+      imagePullPolicy: {{image_pull_policy}}
+      livenessProbe:
+        failureThreshold: 8
+        httpGet:
+          host: 127.0.0.1
+          path: /health
+          port: {{etcd_metrics_port}}
+          scheme: HTTP
+        initialDelaySeconds: 15
+        timeoutSeconds: 15
+      name: kube-etcd
+      volumeMounts:
+        - mountPath: /etc/kubernetes/ssl
+          name: etcd-ssl
+        - mountPath: /var/lib/etcd
+          name: etcd-data
+  hostNetwork: true
+  priorityClassName: system-cluster-critical
+  volumes:
+    - hostPath:
+        path: /etc/kubernetes/ssl/etcd
+        type: Directory
+      name: etcd-ssl
+    - hostPath:
+        path: {{etcd_dir}}
+        type: DirectoryOrCreate
+      name: etcd-data

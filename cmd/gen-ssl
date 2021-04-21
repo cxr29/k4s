@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2021 CHEN Xianren. All rights reserved.
+# Use of this source code is governed by a MIT
+# license that can be found in the LICENSE file.
+
+set -o errexit -o pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+. check-conf
+. fn-ssl
+
+apiserver_sans+=(
+  "${control_plane_nodes[@]}"
+  "$control_plane_service_ip"
+  kubernetes
+  kubernetes.default
+  kubernetes.default.svc
+  "kubernetes.default.svc.$service_domain"
+)
+etcd_sans=(
+  "${control_plane_nodes[@]}"
+  127.0.0.1
+  localhost
+)
+
+gen_ca ca kubernetes
+gen_server ca apiserver kube-apiserver '' "${apiserver_sans[@]}"
+gen_client ca apiserver-kubelet-client kube-apiserver-kubelet-client system:masters
+gen_client ca sa kubernetes-sa
+gen_client ca controller-manager system:kube-controller-manager
+gen_client ca scheduler system:kube-scheduler
+gen_client ca admin kubernetes-admin system:masters
+
+gen_ca front-proxy-ca front-proxy-ca
+gen_client front-proxy-ca front-proxy-client front-proxy-client
+
+gen_ca etcd-ca etcd-ca
+gen_server etcd-ca etcd-peer etcd-peer c "${etcd_sans[@]}"
+gen_server etcd-ca etcd-server etcd-server c "${etcd_sans[@]}"
+gen_client etcd-ca etcd-client etcd-client

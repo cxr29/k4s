@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2021 CHEN Xianren. All rights reserved.
+# Use of this source code is governed by a MIT
+# license that can be found in the LICENSE file.
+
+set -o errexit -o pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+if [[ $# -ne 1 ]]; then
+  echo 'Usage: gen-control-plane <ip>'
+  exit 1
+fi
+control_plane_ip="$1"
+
+. check-conf
+. fn-ssl
+. "$files_dir/mo"
+
+if [[ ! " ${control_plane_nodes[@]} " =~ " $control_plane_ip " ]]; then
+  echo "ERROR: invalid control plane: $control_plane_ip"
+  exit 1
+fi
+
+bash gen-worker "$control_plane_ip"
+
+apiserver_addr="$control_plane_ip:$apiserver_port"
+node_dir="$nodes_dir/$control_plane_ip"
+
+d="$node_dir/etc/kubernetes/manifests"
+
+f=kube-etcd.yaml
+cat <"../tpl/$f" | mo >"$d/$f"
+
+f=kube-apiserver.yaml
+cat <"../tpl/$f" | mo >"$d/$f"
+
+f=kube-controller-manager.yaml
+cat <"../tpl/$f" | mo >"$d/$f"
+
+f=kube-scheduler.yaml
+cat <"../tpl/$f" | mo >"$d/$f"
+
+chmod 644 "$d"/*.yaml
+
+###
+d="$node_dir/etc/kubernetes/ssl"
+mkdir -p "$d"
+
+cp -f "$ssl_dir/ca-key.pem" \
+  "$ssl_dir/apiserver.pem" \
+  "$ssl_dir/apiserver-key.pem" \
+  "$ssl_dir/apiserver-kubelet-client.pem" \
+  "$ssl_dir/apiserver-kubelet-client-key.pem" \
+  "$ssl_dir/sa.pem" \
+  "$ssl_dir/sa-key.pem" \
+  "$ssl_dir/front-proxy-ca.pem" \
+  "$ssl_dir/front-proxy-client.pem" \
+  "$ssl_dir/front-proxy-client-key.pem" \
+  "$d"
+chmod 600 "$d"/*.pem
+
+###
+d="$node_dir/etc/kubernetes/ssl/etcd"
+mkdir -p "$d"
+
+cp -f "$ssl_dir/etcd-ca.pem" \
+  "$ssl_dir/etcd-peer.pem" \
+  "$ssl_dir/etcd-peer-key.pem" \
+  "$ssl_dir/etcd-server.pem" \
+  "$ssl_dir/etcd-server-key.pem" \
+  "$ssl_dir/etcd-client.pem" \
+  "$ssl_dir/etcd-client-key.pem" \
+  "$d"
+chmod 600 "$d"/*.pem
+
+###
+d="$node_dir/etc/kubernetes"
+mkdir -p "$d"
+
+f=controller-manager.conf
+gen_conf "$d/$f" controller-manager "$apiserver_addr"
+
+f=scheduler.conf
+gen_conf "$d/$f" scheduler "$apiserver_addr"
+
+# TODO control_plane_service_ip
+f=kubelet.conf
+gen_conf "$d/$f" "$control_plane_ip/kubelet" "$apiserver_addr"
+
+f=kube-proxy.conf
+cat <"../tpl/$f" | mo >"$d/$f"
+chmod 600 "$d/$f"

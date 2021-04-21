@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2021 CHEN Xianren. All rights reserved.
+# Use of this source code is governed by a MIT
+# license that can be found in the LICENSE file.
+
+set -o errexit -o pipefail
+
+wait_kubectl() {
+  timeout=true
+  for _ in {1..30}; do
+    if kubectl cluster-info >/dev/null 2>/dev/null; then
+      timeout=false
+      break
+    fi
+    echo 'wait kubectl sleep 10s'
+    sleep 10
+  done
+  if [[ "$timeout" == true ]]; then
+    echo 'wait kubectl timeout'
+    exit 1
+  fi
+}
+
+get_node_name() {
+  awk -v s="$1" 'BEGIN{n=""}{if(NR>1&&(s==$1||s==$6)){n=$1;exit 0}else if(NR==0&&!($1=="NAME"&&$6=="INTERNAL-IP")){print "invalid kubectl";exit 1}}END{if(n==""){printf("invalid node: %s\n",s);exit 1}else{print n}}' <<<"$(kubectl get nodes -o wide)"
+}
+
+get_node_ip() {
+  awk -v s="$1" 'BEGIN{n=""}{if(NR>1&&(s==$1||s==$6)){n=$6;exit 0}else if(NR==0&&!($1=="NAME"&&$6=="INTERNAL-IP")){print "invalid kubectl";exit 1}}END{if(n==""){printf("invalid node: %s\n",s);exit 1}else{print n}}' <<<"$(kubectl get nodes -o wide)"
+}
+
+wait_node() {
+  local timeout=true
+  for _ in {1..360}; do
+    if kubectl get nodes --no-headers "$(get_node_name "$1")" >/dev/null 2>/dev/null; then
+      timeout=false
+      break
+    fi
+    echo "wait node $1 sleep 10s"
+    sleep 10
+  done
+  if [[ "$timeout" == true ]]; then
+    echo "wait node $1 timeout"
+    exit 1
+  fi
+}
+
+wait_node_net() {
+  local timeout=true
+  local s
+  for _ in {1..360}; do
+    s="$(kubectl get pods -n kube-system --field-selector "spec.nodeName=$(get_node_name "$1")")"
+    if echo "$s" | grep -F kube-proxy | grep -F Running | grep -Fq 1/1; then
+      if echo "$s" | grep -F calico-node | grep -F Running | grep -Fq 1/1; then
+        timeout=false
+        break
+      fi
+    fi
+    echo "wait node net $1 sleep 10s"
+    sleep 10
+  done
+  if [[ "$timeout" == true ]]; then
+    echo "wait node net $1 timeout"
+    exit 1
+  fi
+}
+
+wait_node_ready() {
+  local timeout=true
+  for _ in {1..360}; do
+    if [[ "$(kubectl get nodes --no-headers "$(get_node_name "$1")" | awk '{print $2}')" == Ready ]]; then
+      timeout=false
+      break
+    fi
+    echo "wait node ready $1 sleep 10s"
+    sleep 10
+  done
+  if [[ "$timeout" == true ]]; then
+    echo "wait node ready $1 timeout"
+    exit 1
+  fi
+}
+
+_check_ds() {
+  awk -v s="$2" 'BEGIN{ok=1}{if($1==s&&$2==$3&&$2==$4&&$2==$5&&$2==$6){ok=0;exit 0}}END{exit ok}' <<<"$(kubectl get ds -n "$1" "$2")"
+}
+
+check_ds() {
+  if _check_ds "$1" "$2"; then
+    echo "$1/$2: ready"
+  else
+    echo "$1/$2: unready"
+  fi
+}
+
+wait_ds() {
+  local timeout=true
+  for _ in {1..360}; do
+    echo "check $1/$2 sleep 10s"
+    sleep 10
+    if _check_ds "$1" "$2"; then
+      timeout=false
+      break
+    fi
+  done
+  if [[ "$timeout" == true ]]; then
+    echo "check $1/$2 timeout"
+    exit 1
+  fi
+  echo "$1/$2: ready"
+}
+
+_check_deploy() {
+  awk -v s="$2" 'BEGIN{ok=1}{if($1==s){split($2,a,"/");if(a[1]==a[2]&&a[1]==$3&&a[1]==$4){ok=0;exit 0}}}END{exit ok}' <<<"$(kubectl get deploy -n "$1" "$2")"
+}
+
+check_deploy() {
+  if _check_deploy "$1" "$2"; then
+    echo "$1/$2: ready"
+  else
+    echo "$1/$2: unready"
+  fi
+}
+
+wait_deploy() {
+  local timeout=true
+  for _ in {1..360}; do
+    echo "check $1/$2 sleep 10s"
+    sleep 10
+    if _check_deploy "$1" "$2"; then
+      timeout=false
+      break
+    fi
+  done
+  if [[ "$timeout" == true ]]; then
+    echo "check $1/$2 timeout"
+    exit 1
+  fi
+  echo "$1/$2: ready"
+}

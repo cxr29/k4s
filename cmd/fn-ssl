@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2021 CHEN Xianren. All rights reserved.
+# Use of this source code is governed by a MIT
+# license that can be found in the LICENSE file.
+
+set -o errexit -o pipefail
+
+if [[ -z "$ssl_dir" ]]; then
+  exit 1
+fi
+if [[ -z "$log_file" ]]; then
+  log_file=/dev/null
+fi
+
+umask 022
+mkdir -p "$ssl_dir"
+
+# TODO check openssl, ipcalc command
+numbits=2048
+days=3650
+config=''
+
+_gen_ca() {
+  local ca_pem="$ssl_dir/$1.pem"
+  local ca_key_pem="$ssl_dir/$1-key.pem"
+
+  if [[ -f "$ca_pem" ]]; then
+    : # TODO verify
+  else
+    echo "generate $ca_pem"
+    {
+      openssl genrsa -out "$ca_key_pem" "$numbits"
+      openssl req -x509 -set_serial 0 -new -nodes -key "$ca_key_pem" -out "$ca_pem" \
+        -config <(cat <<<"$config") -extensions v3_req -days "$days"
+    } 2>>"$log_file"
+    chmod 600 "$ca_pem" "$ca_key_pem"
+  fi
+}
+
+gen_ca() {
+  config="
+[req]
+prompt = no
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+[req_distinguished_name]
+commonName = $2
+[v3_req]
+basicConstraints = critical,CA:TRUE
+keyUsage = critical,digitalSignature,keyEncipherment,keyCertSign
+"
+
+  _gen_ca "$1"
+}
+
+_gen_ssl() {
+  local ca_pem="$ssl_dir/$1.pem"
+  local ca_key_pem="$ssl_dir/$1-key.pem"
+
+  local c_pem="$ssl_dir/$2.pem"
+  local c_csr="$ssl_dir/$2.csr"
+  local c_key_pem="$ssl_dir/$2-key.pem"
+
+  if [[ -f "$c_pem" ]]; then
+    : # TODO verify
+  else
+    echo "generate $c_pem"
+    {
+      openssl genrsa -out "$c_key_pem" "$numbits"
+      openssl req -new -nodes -key "$c_key_pem" -out "$c_csr" \
+        -config <(cat <<<"$config") -extensions v3_req
+      openssl x509 -req -CA "$ca_pem" -CAkey "$ca_key_pem" -CAcreateserial -in "$c_csr" -out "$c_pem" \
+        -extfile <(cat <<<"$config") -extensions v3_req -days "$days"
+    } 2>>"$log_file"
+    chmod 600 "$c_pem" "$c_key_pem"
+  fi
+}
+
+gen_client() {
+  local o=""
+  if [[ $# -ge 4 ]]; then
+    o="organizationName = $4"
+  fi
+
+  config="
+[req]
+prompt = no
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+[req_distinguished_name]
+commonName = $3
+$o
+[v3_req]
+keyUsage = critical,digitalSignature,keyEncipherment
+extendedKeyUsage = clientAuth
+"
+
+  _gen_ssl "$1" "$2"
+}
+
+gen_server() (
+  local ip=0
+  local dns=0
+
+  for_sans() {
+    for s in "$@"; do
+      if is_ip "$s"; then
+        ip=$((ip + 1))
+        echo "IP.$ip = $s"
+      else
+        dns=$((dns + 1))
+        echo "DNS.$dns = $s"
+      fi
+    done
+  }
+
+  local u="extendedKeyUsage = serverAuth"
+  if [[ -n "$4" ]]; then
+    u="$u,clientAuth"
+  fi
+
+  config="
+[req]
+prompt = no
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+[req_distinguished_name]
+commonName = $3
+[v3_req]
+keyUsage = critical,digitalSignature,keyEncipherment
+$u
+subjectAltName = @sans
+[sans]
+$(for_sans "${@:5}")
+"
+
+  _gen_ssl "$1" "$2"
+
+  unset -f for_sans
+)
+
+gen_conf() {
+  echo "generate $1"
+  {
+    kubectl config --kubeconfig="$1" set-cluster default-cluster --server="https://$3" --certificate-authority "$ssl_dir/ca.pem" --embed-certs
+    kubectl config --kubeconfig="$1" set-credentials default-user --client-key "$ssl_dir/$2-key.pem" --client-certificate "$ssl_dir/$2.pem" --embed-certs
+    kubectl config --kubeconfig="$1" set-context default-context --cluster default-cluster --user default-user
+    kubectl config --kubeconfig="$1" use-context default-context
+  } >>"$log_file"
+  chmod 600 "$1"
+}

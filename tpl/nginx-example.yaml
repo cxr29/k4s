@@ -1,0 +1,61 @@
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: nginx-example
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-example
+  template:
+    metadata:
+      labels:
+        app: nginx-example
+    spec:
+      containers:
+        - name: nginx-example
+          image: {{images.nginx}}
+          imagePullPolicy: {{image_pull_policy}}
+          ports:
+            - containerPort: 80
+              protocol: TCP
+          livenessProbe:
+            failureThreshold: 9
+            initialDelaySeconds: 1
+            periodSeconds: 15
+            successThreshold: 1
+            tcpSocket:
+              port: 80
+            timeoutSeconds: 10
+      tolerations:
+        - key: CriticalAddonsOnly
+          operator: Exists
+        - operator: Exists
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: nginx-example
+spec:
+  ports:
+    - name: nginx-example
+      protocol: TCP
+      port: 80
+  selector:
+    app: nginx-example
+
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: nginx-example
+spec:
+  rules:
+    - host: {{nginx_example_domain}}
+      http:
+        paths:
+          - backend:
+              serviceName: nginx-example
+              servicePort: 80

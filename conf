@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2034
+
+# See https://github.com/cxr29/k4s
+
+control_plane_nodes=(# ip addresses
+)
+
+# TODO one key install
+worker_nodes=(# ip address
+)
+
+# TODO optional
+dns_servers=(# ip addresses
+)
+
+pod_cidr=10.0.0.0/17
+service_cidr=10.0.128.0/18
+#node_cidr=10.0.192.0/19
+#docker_cidr=10.0.224.0/20
+#vpn_cidr=10.0.240.0/20
+
+apiserver_sans=(# ip addresses or dns names
+)
+service_domain=cluster.local
+cluster_name=kubernetes
+
+# TODO latest patch version
+kubernetes_version=v1.18.18
+calico_version=v3.18.1
+
+root_dir=/var/lib/kubelet
+
+# TODO external etcd
+etcd_dir=/var/lib/kube-etcd
+etcd_port=2379
+etcd_peer_port=2380
+etcd_metrics_port=2381
+
+apiserver_port=6443
+controller_manager_port=10257
+scheduler_port=10259
+
+declare -A files=(
+  [mo]=https://raw.githubusercontent.com/tests-always-included/mo/master/mo
+  [kubectl]="https://dl.k8s.io/release/$kubernetes_version/bin/linux/amd64/kubectl"
+  [kubelet]="https://dl.k8s.io/release/$kubernetes_version/bin/linux/amd64/kubelet"
+)
+
+# TODO offline
+declare -A images=(
+  [etcd]=quay.io/coreos/etcd:v3.4.15
+  [pause]=k8s.gcr.io/pause:3.2
+  [coredns]=coredns/coredns:1.6.9
+  [apiserver]="k8s.gcr.io/kube-apiserver:$kubernetes_version"
+  [controller_manager]="k8s.gcr.io/kube-controller-manager:$kubernetes_version"
+  [scheduler]="k8s.gcr.io/kube-scheduler:$kubernetes_version"
+  [proxy]="k8s.gcr.io/kube-proxy:$kubernetes_version"
+  [calico_cni]="docker.io/calico/cni:$calico_version"
+  [calico_kube_controllers]="docker.io/calico/kube-controllers:$calico_version"
+  [calico_node]="docker.io/calico/node:$calico_version"
+  [calico_pod2daemon_flexvol]="docker.io/calico/pod2daemon-flexvol:$calico_version"
+  [calico_typha]="docker.io/calico/typha:$calico_version"
+  [ingress_nginx_controller]=k8s.gcr.io/ingress-nginx/controller:v0.45.0
+  [ingress_webhook_certgen]=docker.io/jettech/kube-webhook-certgen:v1.5.1
+  [nginx]=nginx:1.18.0
+)
+image_pull_policy=IfNotPresent
+nginx_example_domain=''
+
+k4s_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ssl_dir="$k4s_dir/ssl"
