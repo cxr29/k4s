@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2021 CHEN Xianren. All rights reserved.
+# Use of this source code is governed by a MIT
+# license that can be found in the LICENSE file.
+
+set -o errexit -o pipefail
+
+if systemctl is-active kubelet; then
+  systemctl stop kubelet
+fi
+
+if systemctl is-active resolvconf; then
+  systemctl stop resolvconf
+fi
+f=/etc/resolv.conf
+if [[ -f "$f.k4s" ]]; then
+  chattr -i "$f"
+  mv -f "$f.k4s" "$f"
+fi
+
+if systemctl is-active docker; then
+  while read -r i; do
+    if [[ -n "$i" ]]; then
+      docker stop "$i"
+      if [[ "$#" -gt 0 ]]; then
+        docker rm --volumes "$i"
+      fi
+    fi
+  done <<<"$(docker ps -a --filter name=k8s_ -q)"
+fi
+
+for i in "$@"; do
+  while read -r j; do
+    if [[ -n "$j" && "$j" == "$i"* ]]; then
+      umount "$j"
+    fi
+  done <<<"$(mount | awk '{print $3}')"
+done

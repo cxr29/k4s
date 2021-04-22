@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2021 CHEN Xianren. All rights reserved.
+# Use of this source code is governed by a MIT
+# license that can be found in the LICENSE file.
+
+set -o errexit -o pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+if [[ $# -ne 1 ]]; then
+  echo 'Usage: gen-worker <ip>'
+  exit 1
+fi
+
+. check-conf
+. "$files_dir/mo"
+
+shopt -s expand_aliases
+alias kubectl="'$files_dir/kubectl' --kubeconfig='$files_dir/admin.conf'"
+. fn-ssl
+
+worker_ip="$1"
+apiserver_addr="$control_plane_service_ip"
+
+# TODO force
+node_dir="$nodes_dir/$worker_ip"
+if [[ -d "$node_dir" ]]; then
+  echo "ERROR: $worker_ip already exists"
+  exit 1
+fi
+mkdir -p "$node_dir"
+
+###
+mkdir -p "$ssl_dir/$worker_ip"
+gen_client ca "$worker_ip/kubelet" "system:node:$worker_ip" system:nodes
+
+d="$node_dir/etc/kubernetes"
+mkdir -p "$d"
+
+f=kube-proxy.conf
+cat <"../tpl/$f" | mo >"$d/$f"
+chmod 600 "$d/$f"
+
+f=kubelet.conf
+gen_conf "$d/$f" "$worker_ip/kubelet" "$apiserver_addr"
+
+f=kubelet-pre.sh
+cat <"../tpl/$f" | mo >"$d/$f"
+chmod 755 "$d/$f"
+
+if [[ "${#dns_servers[@]}" -gt 0 ]]; then
+  f=resolvconf.sh
+  cat <"../tpl/$f" | mo >"$d/$f"
+  chmod 755 "$d/$f"
+fi
+
+###
+d="$node_dir/etc/systemd/system"
+mkdir -p "$d"
+
+f=kubelet.service
+cat <"../tpl/$f" | mo >"$d/$f"
+chmod 644 "$d/$f"
+
+if [[ "${#dns_servers[@]}" -gt 0 ]]; then
+  f=resolvconf.service
+  cat <"../tpl/$f" | mo >"$d/$f"
+  chmod 644 "$d/$f"
+fi
+
+###
+d="$node_dir$root_dir"
+mkdir -p "$d"
+
+f=config.yaml
+cat <"../tpl/$f" | mo >"$d/$f"
+chmod 644 "$d/$f"
+
+###
+d="$node_dir/etc/kubernetes/ssl"
+mkdir -p "$d"
+
+cp -f "$ssl_dir/ca.pem" "$d"
+chmod 600 "$d"/*.pem
+
+###
+d="$node_dir/etc/kubernetes/manifests"
+mkdir -p "$d"

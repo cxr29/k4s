@@ -1,0 +1,14 @@
+[Unit]
+Description=resolvconf
+Wants=local-fs.target
+After=local-fs.target
+Wants=network-pre.target
+Before=network-pre.target
+
+[Service]
+ExecStart=/etc/kubernetes/resolvconf.sh
+Restart=on-failure
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

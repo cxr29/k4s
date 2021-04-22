@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2021 CHEN Xianren. All rights reserved.
+# Use of this source code is governed by a MIT
+# license that can be found in the LICENSE file.
+
+set -o errexit -o pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+umask 022
+
+. ../conf
+
+if [[ "$k4s_dir" != /* ]]; then
+  echo "ERROR: invalid k4s dir: $k4s_dir"
+  exit 1
+fi
+
+log_file="$k4s_dir/log"
+files_dir="$k4s_dir/files"
+nodes_dir="$k4s_dir/nodes"
+backup_dir="$k4s_dir/backup"
+
+. fn
+
+control_plane_count="${#control_plane_nodes[@]}"
+if [[ "$control_plane_count" -eq 0 ]]; then
+  echo 'ERROR: no control plane'
+  exit 1
+fi
+for s in "${control_plane_nodes[@]}"; do
+  if ! is_ip "$s"; then
+    echo "ERROR: invalid control plane: $s"
+    exit 1
+  fi
+done
+
+if [[ "${#dns_servers[@]}" -gt 0 ]]; then
+  for s in "${dns_servers[@]}"; do
+    if ! is_ip "$s"; then
+      echo "ERROR: invalid dns server: $s"
+      exit 1
+    fi
+  done
+fi
+
+if ! is_cidr "$pod_cidr"; then
+  echo "ERROR: invalid pod cidr: $pod_cidr"
+  exit 1
+fi
+s="$(ipcalc -4 -p "$pod_cidr" | sed 's/PREFIX=//')"
+if [[ "$s" -lt 8 || "$s" -gt 20 ]]; then
+  echo "ERROR: pod cidr prefix must be 8-20"
+  exit 1
+fi
+
+if ! is_cidr "$service_cidr"; then
+  echo "ERROR: invalid service cidr: $service_cidr"
+  exit 1
+fi
+s="$(ipcalc -4 -p "$service_cidr" | sed 's/PREFIX=//')"
+if [[ "$s" -lt 12 || "$s" -gt 24 ]]; then
+  echo "ERROR: service cidr prefix must be 12-24"
+  exit 1
+fi
+
+s="$(ipcalc -4 -n "$service_cidr" | sed 's/NETWORK=//')"
+control_plane_service_ip="$(assign_ip "$s" 1)"
+cluster_dns="$(assign_ip "$s" 3)"
+
+if [[ "$root_dir" != /* ]]; then
+  echo "ERROR: invalid root dir: $root_dir"
+  exit 1
+fi
+if [[ "$etcd_dir" != /* ]]; then
+  echo "ERROR: invalid etcd dir: $etcd_dir"
+  exit 1
+fi
+
+unset s

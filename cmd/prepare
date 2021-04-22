@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2021 CHEN Xianren. All rights reserved.
+# Use of this source code is governed by a MIT
+# license that can be found in the LICENSE file.
+
+set -o errexit -o pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+. check-conf
+
+mkdir -p "$files_dir"
+
+for k in "${!files[@]}"; do
+  f="$files_dir/$k"
+  v="${files[$k]}"
+  if [[ -f "$f" ]]; then
+    : # TODO verify
+  elif [[ "$v" == http://* || "$v" == https://* ]]; then
+    echo "download $k: $v"
+    curl -fsSL -o "$f" "$v"
+  else
+    echo "copy $k: $v"
+    cp -f "$v" "$f"
+  fi
+done
+
+chmod 755 "$files_dir/kubectl"
+if [[ -f "$files_dir/etcdctl" ]]; then
+  chmod 755 "$files_dir/etcdctl"
+elif [[ -f "$files_dir/etcd.tgz" ]]; then
+  d="/tmp/etcd-$RANDOM"
+  mkdir -p "$d"
+  tar -xzf "$files_dir/etcd.tgz" -C "$d" --strip-components=1
+  mv -f "$d/etcdctl" "$files_dir/etcdctl"
+  chmod 755 "$files_dir/etcdctl"
+  rm -rf "$d"
+fi
+
+# TODO offline images

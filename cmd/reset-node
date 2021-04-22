@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2021 CHEN Xianren. All rights reserved.
+# Use of this source code is governed by a MIT
+# license that can be found in the LICENSE file.
+
+set -o errexit -o pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+if [[ $# -ne 1 ]]; then
+  echo 'Usage: reset-node <ip>'
+  exit 1
+fi
+if [[ "$(id -u)" -ne 0 ]]; then
+  echo 'Please run as root'
+  exit
+fi
+
+. check-conf # TODO autodetect?
+
+node_ip="$(ip -o route get to "${control_plane_nodes[0]}" | sed -n 's/.*src \([0-9.]\+\).*/\1/p')"
+
+if [[ "$1" != "$node_ip" ]]; then
+  echo "Error: not local ip: $1"
+  exit 1
+fi
+
+echo "reset node: $node_ip"
+echo "  root dir: $root_dir"
+if [[ " ${control_plane_nodes[@]} " =~ " $node_ip " ]]; then
+  echo "  etcd dir: $etcd_dir"
+fi
+read -r -p ' yes or no: ' yn
+echo
+if [[ "$yn" != yes ]]; then
+  exit 1
+fi
+
+bash stop "$root_dir"
+
+if [[ -f /etc/systemd/system/kubelet.service ]]; then
+  systemctl disable kubelet
+  rm -f /etc/systemd/system/kubelet.service
+  systemctl daemon-reload
+fi
+
+if [[ -f /etc/systemd/system/resolvconf.service ]]; then
+  systemctl disable resolvconf
+  rm -f /etc/systemd/system/resolvconf.service
+  systemctl daemon-reload
+fi
+
+if [[ -f /usr/bin/kubelet ]]; then
+  rm -f /usr/bin/kubelet
+fi
+
+if [[ -d /etc/kubernetes ]]; then
+  rm -rf /etc/kubernetes
+fi
+
+if [[ -d "$root_dir" ]]; then
+  rm -rf "$root_dir"
+fi
+
+if [[ " ${control_plane_nodes[@]} " =~ " $node_ip " && -d "$etcd_dir" ]]; then
+  # TODO remove etcd member
+  rm -rf "$etcd_dir"
+fi

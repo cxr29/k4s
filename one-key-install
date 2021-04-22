@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2021 CHEN Xianren. All rights reserved.
+# Use of this source code is governed by a MIT
+# license that can be found in the LICENSE file.
+
+set -o errexit -o pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+cd cmd
+. check-conf
+
+if [[ -n "$old_kubernetes_version" ]]; then
+  echo 'ERROR: old kubernetes version not required'
+  exit 1
+fi
+
+bash prepare
+bash gen-ssl
+bash gen-files
+
+bash gen-nodes "${control_plane_nodes[@]}"
+bash dispatch install "${control_plane_nodes[@]}"
+bash install-control-plane
+
+if [[ "${#worker_nodes[@]}" -gt 0 ]]; then
+  bash gen-nodes "${worker_nodes[@]}"
+  bash dispatch install "${worker_nodes[@]}"
+  bash wait-nodes "${worker_nodes[@]}"
+fi

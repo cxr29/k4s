@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    component: kube-apiserver
+    tier: control-plane
+  name: kube-apiserver
+  namespace: kube-system
+spec:
+  containers:
+    - command:
+        - kube-apiserver
+        - --advertise-address={{control_plane_ip}}
+        - --allow-privileged=true
+        - --authorization-mode=Node,RBAC
+        - --bind-address={{control_plane_ip}}
+        - --client-ca-file=/etc/kubernetes/ssl/ca.pem
+        - --enable-admission-plugins=NodeRestriction
+        - --enable-bootstrap-token-auth=true
+        - --etcd-cafile=/etc/kubernetes/ssl/etcd/etcd-ca.pem
+        - --etcd-certfile=/etc/kubernetes/ssl/etcd/etcd-client.pem
+        - --etcd-keyfile=/etc/kubernetes/ssl/etcd/etcd-client-key.pem
+        - --etcd-servers={{#control_plane_nodes}}{{comma_if_not_first}}https://{{.}}:{{etcd_port}}{{/control_plane_nodes}}
+        - --insecure-port=0
+        - --kubelet-client-certificate=/etc/kubernetes/ssl/apiserver-kubelet-client.pem
+        - --kubelet-client-key=/etc/kubernetes/ssl/apiserver-kubelet-client-key.pem
+        - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
+        - --proxy-client-cert-file=/etc/kubernetes/ssl/front-proxy-client.pem
+        - --proxy-client-key-file=/etc/kubernetes/ssl/front-proxy-client-key.pem
+        - --requestheader-allowed-names=front-proxy-client
+        - --requestheader-client-ca-file=/etc/kubernetes/ssl/front-proxy-ca.pem
+        - --requestheader-extra-headers-prefix=X-Remote-Extra-
+        - --requestheader-group-headers=X-Remote-Group
+        - --requestheader-username-headers=X-Remote-User
+        - --secure-port={{apiserver_port}}
+        - --service-account-key-file=/etc/kubernetes/ssl/sa.pem
+        - --service-cluster-ip-range={{service_cidr}}
+        - --tls-cert-file=/etc/kubernetes/ssl/apiserver.pem
+        - --tls-private-key-file=/etc/kubernetes/ssl/apiserver-key.pem
+      image: {{images.apiserver}}
+      imagePullPolicy: {{image_pull_policy}}
+      livenessProbe:
+        failureThreshold: 8
+        httpGet:
+          host: {{control_plane_ip}}
+          path: /healthz
+          port: {{apiserver_port}}
+          scheme: HTTPS
+        initialDelaySeconds: 15
+        timeoutSeconds: 15
+      name: kube-apiserver
+      volumeMounts:
+        - mountPath: /etc/kubernetes/ssl
+          name: ssl
+          readOnly: true
+  hostNetwork: true
+  priorityClassName: system-cluster-critical
+  volumes:
+    - hostPath:
+        path: /etc/kubernetes/ssl
+        type: Directory
+      name: ssl

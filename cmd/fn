@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2021 CHEN Xianren. All rights reserved.
+# Use of this source code is governed by a MIT
+# license that can be found in the LICENSE file.
+
+set -o errexit -o pipefail
+
+join_by() {
+  local IFS="$1"
+  shift
+  echo "$*"
+}
+
+# shellcheck disable=SC2046
+# shellcheck disable=SC2086
+# shellcheck disable=SC2183
+assign_ip() {
+  local x
+  x=$(printf '0x%.2x%.2x%.2x%.2x' ${1//./ })
+  x=$((x + $2))
+  printf '%d.%d.%d.%d' $(printf '%.8x' "$x" | sed -E 's/(..)/0x\1 /g')
+}
+
+is_ip() {
+  if ipcalc -4 -c "$1" >/dev/null 2>&1; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+is_cidr() {
+  if ipcalc -4 -p "$1" >/dev/null 2>&1; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+# shellcheck disable=SC2154
+comma_if_not_first() {
+  [[ "${moCurrent#*.}" != '0' ]] && echo ','
+}

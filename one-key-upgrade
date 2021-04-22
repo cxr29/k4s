@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2021 CHEN Xianren. All rights reserved.
+# Use of this source code is governed by a MIT
+# license that can be found in the LICENSE file.
+
+set -o errexit -o pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+cd cmd
+. check-conf
+
+if [[ -z "$old_kubernetes_version" ]]; then
+  echo 'ERROR: old kubernetes version required'
+  exit 1
+fi
+
+bash prepare
+bash gen-files
+
+shopt -s expand_aliases
+alias kubectl="'$files_dir/kubectl' --kubeconfig='$files_dir/admin.conf'"
+
+v="$(kubectl version --short)"
+echo "$v"
+if ! echo "$v" | grep -Fi server | sed 's/$/-/' | grep -Fqi " $old_kubernetes_version-"; then
+  exit 1
+fi
+
+mkdir -p "$backup_dir"
+for s in "${control_plane_nodes[@]}"; do
+  f="$backup_dir/etcd-$s-$(date '+%Y%m%d%H%M%S')"
+  ETCDCTL_API=3 "$files_dir/etcdctl" --endpoints="https://$s:$etcd_port" \
+    --cacert="$ssl_dir/etcd-ca.pem" --cert="$ssl_dir/etcd-client.pem" --key="$ssl_dir/etcd-client-key.pem" \
+    snapshot save "$f" 2>>"$log_file"
+done
+unset s f
+
+bash gen-nodes "${control_plane_nodes[@]}"
+bash dispatch upgrade "${control_plane_nodes[@]}"
+bash upgrade-control-plane
+
+v="$(kubectl version --short)"
+echo "$v"
+if ! echo "$v" | grep -Fi client | sed 's/$/-/' | grep -Fqi " $kubernetes_version-"; then
+  exit 1
+fi
+if ! echo "$v" | grep -Fi server | sed 's/$/-/' | grep -Fqi " $kubernetes_version-"; then
+  exit 1
+fi
+
+if [[ "${#worker_nodes[@]}" -gt 0 ]]; then
+  for s in "${worker_nodes[@]}"; do
+    bash gen-nodes "$s"
+    bash dispatch upgrade "$s"
+    bash wait-nodes "$s"
+  done
+fi

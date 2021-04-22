@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2021 CHEN Xianren. All rights reserved.
+# Use of this source code is governed by a MIT
+# license that can be found in the LICENSE file.
+
+set -o errexit -o pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+. check-conf
+
+shopt -s expand_aliases
+alias kubectl="'$files_dir/kubectl' --kubeconfig='$files_dir/admin.conf'"
+. fn-kube
+
+wait_kubectl
+
+for s in "${control_plane_nodes[@]}"; do
+  wait_node "$s" "$kubernetes_version"
+
+  s="$(get_node_name "$s")"
+  kubectl label node "$s" node-role.kubernetes.io/master=
+  kubectl label node "$s" node-role.kubernetes.io/lb=
+done
+
+kubectl create -f "$files_dir/kube-proxy.yaml"
+kubectl create -f "$files_dir/calico.yaml"
+
+for s in "${control_plane_nodes[@]}"; do
+  wait_node_net "$s"
+  wait_node_ready "$s"
+done
+
+kubectl create -f "$files_dir/coredns.yaml"
+wait_ds kube-system coredns
+
+kubectl create -f "$files_dir/ingress-nginx.yaml"
+wait_ds kube-system ingress-nginx-controller
+
+if [[ -n "$nginx_example_domain" ]]; then
+  kubectl create -f "$files_dir/nginx-example.yaml"
+  wait_deploy default nginx-example
+fi
