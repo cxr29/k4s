@@ -18,9 +18,16 @@ fi
 shopt -s expand_aliases
 alias kubectl="'$files_dir/kubectl' --kubeconfig='$files_dir/admin.conf'"
 . fn-ssl
+. fn-kube
 
 worker_ip="$1"
 apiserver_addr="$control_plane_service_ip"
+
+if [[ -n "$old_kubernetes_version" ]]; then
+  node_name="$(get_node_name "$worker_ip")"
+elif [[ -z "$node_name" ]]; then
+  node_name="$worker_ip"
+fi
 
 # TODO force
 node_dir="$nodes_dir/$worker_ip"

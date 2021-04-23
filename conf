@@ -76,4 +76,3 @@ ssl_dir="$k4s_dir/ssl"
 #ssh_port=
 
 #old_kubernetes_version=
-

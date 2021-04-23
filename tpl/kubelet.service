@@ -5,7 +5,7 @@ After=network-online.target remote-fs.target
 
 [Service]
 ExecStartPre=/etc/kubernetes/kubelet-pre.sh
-ExecStart=/usr/bin/kubelet --hostname-override={{worker_ip}} --kubeconfig=/etc/kubernetes/kubelet.conf --config={{root_dir}}/config.yaml --root-dir={{root_dir}} --pod-infra-container-image={{images.pause}} --network-plugin=cni
+ExecStart=/usr/bin/kubelet --hostname-override={{node_name}} --kubeconfig=/etc/kubernetes/kubelet.conf --config={{root_dir}}/config.yaml --root-dir={{root_dir}} --pod-infra-container-image={{images.pause}} --network-plugin=cni
 Restart=always
 RestartSec=15
 
